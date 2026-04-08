@@ -14,7 +14,11 @@ dependencies = [
     "pydantic>=2.7.0",
     "openai>=1.30.0",
     "requests>=2.32.0",
+    "openenv-core>=0.2.0",
 ]
+
+[project.scripts]
+support-routing-server = "app:app"
 
 [project.urls]
 "Homepage" = "https://github.com/Meet-Ramjiyani-10/Support_Ticket_Routing"
