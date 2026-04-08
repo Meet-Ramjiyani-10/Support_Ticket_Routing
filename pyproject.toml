@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-support-routing-server = "server.app:app"
+support-routing-server = "server.app:main"
 
 [project.urls]
 "Homepage" = "https://github.com/Meet-Ramjiyani-10/Support_Ticket_Routing"
