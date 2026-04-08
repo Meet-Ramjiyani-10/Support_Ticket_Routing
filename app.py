@@ -1,11 +1,21 @@
-﻿from fastapi import FastAPI, HTTPException, Request
+﻿"""
+FastAPI app — exposes the OpenEnv HTTP interface for the Support Routing Environment.
+"""
+
+import os
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import asyncio
+
 from env import SupportRoutingEnv, Action, Observation, Reward
 
-app = FastAPI(title="Support Ticket Routing — OpenEnv", version="1.0.0")
+app = FastAPI(
+    title="Support Ticket Routing — OpenEnv",
+    description="An OpenEnv environment for training agents to route customer support tickets.",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,9 +66,17 @@ def list_tasks():
         ]
     }
 
+# ✅ FIXED: Accepts both GET and POST, query params AND JSON body
+@app.get("/reset")
+def reset_get(task: str = "task_easy", seed: int = 42):
+    env = SupportRoutingEnv(task=task, seed=seed)
+    _envs[task] = env
+    obs = env.reset()
+    return obs
+
 @app.post("/reset")
-def reset(task: str = "task_easy", seed: int = 42, request: Request = None):
-    # Try to get from JSON body if present
+def reset_post(task: str = "task_easy", seed: int = 42, request: Request = None):
+    # If JSON body is provided, use it
     if request and request.headers.get("content-type") == "application/json":
         try:
             body = asyncio.run(request.json())
