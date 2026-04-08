@@ -1,0 +1,21 @@
+﻿[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "support-ticket-routing"
+version = "1.0.0"
+description = "OpenEnv environment for customer support ticket routing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn>=0.29.0",
+    "pydantic>=2.7.0",
+    "openai>=1.30.0",
+    "requests>=2.32.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Meet-Ramjiyani-10/Support_Ticket_Routing"
+"HF Space" = "https://huggingface.co/spaces/Meetppatel/support-ticket-routing"
