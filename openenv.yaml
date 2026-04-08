@@ -1,0 +1,73 @@
+name: support-ticket-routing
+version: "1.0.0"
+description: >
+  An OpenEnv environment that simulates a real-world customer support ticket
+  routing system. An AI agent reads incoming support tickets and must decide
+  which queue to route them to, what priority to assign, and whether to escalate
+  to a human agent.
+
+author: "OpenEnv Hackathon Team"
+tags:
+  - openenv
+  - customer-support
+  - nlp
+  - routing
+  - real-world
+
+tasks:
+  - id: task_easy
+    description: Route 3 clearly-signaled tickets with obvious queue and priority indicators
+    difficulty: easy
+    max_steps: 3
+    score_range: [0.0, 1.0]
+
+  - id: task_medium
+    description: Route 3 ambiguous tickets requiring tier-awareness and context understanding
+    difficulty: medium
+    max_steps: 3
+    score_range: [0.0, 1.0]
+
+  - id: task_hard
+    description: Route 3 edge-case tickets involving legal threats, security incidents, and mass churn
+    difficulty: hard
+    max_steps: 3
+    score_range: [0.0, 1.0]
+
+observation_space:
+  type: object
+  fields:
+    ticket_id: string
+    subject: string
+    body: string
+    customer_tier: "enum: free | pro | enterprise"
+    previous_contacts: integer
+    created_at: string
+    available_queues: "list[string]"
+
+action_space:
+  type: object
+  fields:
+    queue: "enum: billing | technical | general | sales | abuse"
+    priority: "enum: low | medium | high | critical"
+    requires_human: boolean
+    notes: "string (optional)"
+
+reward:
+  type: float
+  range: [0.0, 1.0]
+  components:
+    queue_correctness: 40%
+    priority_correctness: 30%
+    escalation_correctness: 20%
+    notes_quality: 10%
+
+endpoints:
+  reset: POST /reset
+  step:  POST /step
+  state: GET  /state
+  tasks: GET  /tasks
+  grade: GET  /grade
+
+runtime:
+  docker: true
+  huggingface_space: true
