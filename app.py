@@ -1,22 +1,12 @@
-﻿"""
-FastAPI app — exposes the OpenEnv HTTP interface for the Support Routing Environment.
-"""
-
-import os
-from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-
+import asyncio
 from env import SupportRoutingEnv, Action, Observation, Reward
 
-app = FastAPI(
-    title="Support Ticket Routing — OpenEnv",
-    description="An OpenEnv environment for training agents to route customer support tickets.",
-    version="1.0.0",
-)
+app = FastAPI(title="Support Ticket Routing — OpenEnv", version="1.0.0")
 
-# ✅ CORS MIDDLEWARE - Fixes reset post failed error
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,10 +56,19 @@ def list_tasks():
         ]
     }
 
-@app.post("/reset", response_model=Observation)
-def reset(req: ResetRequest):
-    env = SupportRoutingEnv(task=req.task, seed=req.seed)
-    _envs[req.task] = env
+@app.post("/reset")
+def reset(task: str = "task_easy", seed: int = 42, request: Request = None):
+    # Try to get from JSON body if present
+    if request and request.headers.get("content-type") == "application/json":
+        try:
+            body = asyncio.run(request.json())
+            task = body.get("task", task)
+            seed = body.get("seed", seed)
+        except:
+            pass
+    
+    env = SupportRoutingEnv(task=task, seed=seed)
+    _envs[task] = env
     obs = env.reset()
     return obs
 
