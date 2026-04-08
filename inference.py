@@ -1,15 +1,6 @@
-"""
+﻿"""
 Inference Script — Support Ticket Routing Environment
-======================================================
-MANDATORY setup:
-  API_BASE_URL   The API endpoint for the LLM.
-  MODEL_NAME     The model identifier to use for inference.
-  HF_TOKEN       Your Hugging Face / API key.
-
-Run:
-  python inference.py
-
-Expected output: scores for task_easy, task_medium, task_hard
+OpenEnv Hackathon Compliant Version
 """
 
 import os
@@ -17,13 +8,18 @@ import json
 import requests
 from openai import OpenAI
 
-# ── Config ───────────────────────────────────────────────────────────────────────
+# Required environment variables
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
-MODEL_NAME   = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
-ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
+
+# HF Space URL
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "https://meetppatel-support-ticket-routing.hf.space")
+
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 SYSTEM_PROMPT = """You are an expert customer support manager.
 You will be given a support ticket and must route it correctly.
@@ -34,26 +30,9 @@ Respond ONLY with a JSON object in this exact format:
   "priority": "<one of: low, medium, high, critical>",
   "requires_human": <true or false>,
   "notes": "<brief reason for your routing decision>"
-}
-
-Routing rules:
-- billing: payment issues, invoices, refunds, cancellations
-- technical: bugs, crashes, API issues, login problems, security incidents
-- general: how-to questions, feature requests, documentation
-- sales: upgrade inquiries, enterprise interest, pricing questions
-- abuse: GDPR violations, scraping, ToS violations, legal threats
-
-Priority rules:
-- critical: enterprise customers with blockers, legal threats, security breaches, mass cancellations
-- high: paying customers blocked from core features, billing errors, potential churn
-- medium: degraded experience, workarounds exist
-- low: feature requests, general questions
-
-requires_human: true if the issue needs a human agent (financial impact, legal, security, churn risk)
-"""
+}"""
 
 def route_ticket(obs: dict) -> dict:
-    """Ask the LLM to route a single ticket."""
     user_msg = f"""Route this support ticket:
 
 Subject: {obs['subject']}
@@ -66,95 +45,72 @@ Available queues: {', '.join(obs['available_queues'])}
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": user_msg},
+            {"role": "user", "content": user_msg},
         ],
         temperature=0.1,
         max_tokens=200,
     )
     raw = response.choices[0].message.content.strip()
-
-    # Strip markdown code fences if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
     raw = raw.strip()
+    return json.loads(raw)
 
-    action = json.loads(raw)
-    return action
-
-
-def run_task(task_id: str) -> float:
-    """Run one full episode of a task and return the grade score."""
-    print(f"\n{'='*50}")
-    print(f"Task: {task_id}")
-    print(f"{'='*50}")
-
-    # Reset
+def run_task(task_id: str):
+    print(f"[START] task={task_id} env=support-ticket-routing model={MODEL_NAME}")
+    
     reset_resp = requests.post(f"{ENV_BASE_URL}/reset", json={"task": task_id, "seed": 42})
     reset_resp.raise_for_status()
     obs = reset_resp.json()
-
+    
     step_num = 0
     done = False
+    rewards = []
+    error = None
 
     while not done:
         step_num += 1
-        print(f"\n--- Ticket {step_num} ---")
-        print(f"  Subject : {obs['subject']}")
-        print(f"  Tier    : {obs['customer_tier']}")
-
-        action = route_ticket(obs)
-        print(f"  Routed  : queue={action['queue']} | priority={action['priority']} | human={action['requires_human']}")
-
-        step_resp = requests.post(f"{ENV_BASE_URL}/step", json={
-            "task": task_id,
-            "action": action,
-        })
-        step_resp.raise_for_status()
-        result = step_resp.json()
-
-        reward_val = result["reward"]["value"]
-        feedback   = result["reward"]["feedback"]
-        print(f"  Reward  : {reward_val:.2f} — {feedback}")
-
-        done = result["done"]
-        if not done:
+        try:
+            action = route_ticket(obs)
+            action_str = f"queue={action['queue']},priority={action['priority']},human={action['requires_human']}"
+            
+            step_resp = requests.post(f"{ENV_BASE_URL}/step", json={
+                "task": task_id,
+                "action": action,
+            })
+            step_resp.raise_for_status()
+            result = step_resp.json()
+            
+            reward_val = result["reward"]["value"]
+            done = result["done"]
+            rewards.append(reward_val)
+            error = None
+            
+        except Exception as e:
+            error = str(e)
+            reward_val = 0.0
+            done = True
+            rewards.append(reward_val)
+            action_str = "error"
+        
+        print(f"[STEP] step={step_num} action={action_str} reward={reward_val:.2f} done={str(done).lower()} error={error if error else 'null'}")
+        
+        if not done and 'result' in locals() and result.get("observation"):
             obs = result["observation"]
-
-    # Grade
-    grade_resp = requests.get(f"{ENV_BASE_URL}/grade", params={"task": task_id})
-    grade_resp.raise_for_status()
-    score = grade_resp.json()["score"]
-    print(f"\n✅ Final score for {task_id}: {score:.4f}")
-    return score
-
+    
+    success = len(rewards) > 0 and all(r > 0.5 for r in rewards) if rewards else False
+    rewards_str = ",".join([f"{r:.2f}" for r in rewards])
+    print(f"[END] success={str(success).lower()} steps={step_num} rewards={rewards_str}")
 
 def main():
-    print("Support Ticket Routing — Baseline Inference")
-    print(f"Model   : {MODEL_NAME}")
-    print(f"Env URL : {ENV_BASE_URL}")
-
     tasks = ["task_easy", "task_medium", "task_hard"]
-    scores = {}
-
     for task in tasks:
         try:
-            scores[task] = run_task(task)
+            run_task(task)
         except Exception as e:
-            print(f"ERROR on {task}: {e}")
-            scores[task] = 0.0
-
-    print("\n" + "="*50)
-    print("BASELINE SCORES SUMMARY")
-    print("="*50)
-    for task, score in scores.items():
-        bar = "█" * int(score * 20)
-        print(f"  {task:<15} {score:.4f}  {bar}")
-    overall = sum(scores.values()) / len(scores)
-    print(f"\n  Overall avg: {overall:.4f}")
-    print("="*50)
-
+            print(f"[END] success=false steps=0 rewards= error={str(e)}")
 
 if __name__ == "__main__":
     main()
