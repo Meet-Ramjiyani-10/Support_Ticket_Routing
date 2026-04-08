@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import asyncio
+import uvicorn
 
 # Import from parent directory
 import sys
@@ -110,3 +111,12 @@ def grade(task: str = "task_easy"):
     env = _get_env(task)
     score = env.grade()
     return GradeResponse(task=task, score=score, history_length=len(env._history))
+
+
+def main():
+    """Entry point for the validator"""
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+if __name__ == "__main__":
+    main()
