@@ -2,16 +2,15 @@
 FastAPI app — exposes the OpenEnv HTTP interface for the Support Routing Environment.
 """
 
-import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import asyncio
-import uvicorn
-
-# Import from parent directory
 import sys
+import os
+
+# Allow import from parent directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from env import SupportRoutingEnv, Action, Observation, Reward
@@ -112,9 +111,8 @@ def grade(task: str = "task_easy"):
     score = env.grade()
     return GradeResponse(task=task, score=score, history_length=len(env._history))
 
-
+# THIS IS REQUIRED FOR THE VALIDATOR
 def main():
-    """Entry point for the validator"""
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7860)
 
