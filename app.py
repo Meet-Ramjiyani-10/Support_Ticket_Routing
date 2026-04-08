@@ -1,6 +1,5 @@
-"""
+﻿"""
 FastAPI app — exposes the OpenEnv HTTP interface for the Support Routing Environment.
-Endpoints: POST /reset  POST /step  GET /state  GET /tasks  GET /health
 """
 
 import os
@@ -17,6 +16,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ✅ CORS MIDDLEWARE - Fixes reset post failed error
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,9 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global env instances per task
 _envs: dict[str, SupportRoutingEnv] = {}
-
 
 def _get_env(task: str) -> SupportRoutingEnv:
     if task not in SupportRoutingEnv.TASKS:
@@ -34,9 +32,6 @@ def _get_env(task: str) -> SupportRoutingEnv:
     if task not in _envs:
         _envs[task] = SupportRoutingEnv(task=task)
     return _envs[task]
-
-
-# ── Request / Response schemas ───────────────────────────────────────────────────
 
 class ResetRequest(BaseModel):
     task: str = "task_easy"
@@ -57,24 +52,19 @@ class GradeResponse(BaseModel):
     score: float
     history_length: int
 
-
-# ── Endpoints ────────────────────────────────────────────────────────────────────
-
 @app.get("/health")
 def health():
     return {"status": "ok", "env": "support-routing"}
-
 
 @app.get("/tasks")
 def list_tasks():
     return {
         "tasks": [
-            {"id": "task_easy",   "description": "Route 3 clearly-signaled tickets",          "difficulty": "easy"},
-            {"id": "task_medium", "description": "Route 3 ambiguous tickets with tier signals","difficulty": "medium"},
-            {"id": "task_hard",   "description": "Route 3 edge-case tickets (legal/security)", "difficulty": "hard"},
+            {"id": "task_easy", "description": "Route 3 clearly-signaled tickets", "difficulty": "easy"},
+            {"id": "task_medium", "description": "Route 3 ambiguous tickets with tier signals", "difficulty": "medium"},
+            {"id": "task_hard", "description": "Route 3 edge-case tickets (legal/security)", "difficulty": "hard"},
         ]
     }
-
 
 @app.post("/reset", response_model=Observation)
 def reset(req: ResetRequest):
@@ -82,7 +72,6 @@ def reset(req: ResetRequest):
     _envs[req.task] = env
     obs = env.reset()
     return obs
-
 
 @app.post("/step", response_model=StepResponse)
 def step(req: StepRequest):
@@ -93,12 +82,10 @@ def step(req: StepRequest):
         raise HTTPException(status_code=400, detail=str(e))
     return StepResponse(observation=obs, reward=reward, done=done, info=info)
 
-
 @app.get("/state")
 def state(task: str = "task_easy"):
     env = _get_env(task)
     return env.state()
-
 
 @app.get("/grade", response_model=GradeResponse)
 def grade(task: str = "task_easy"):
